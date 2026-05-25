@@ -1,0 +1,29 @@
+# --- SENSITIVE FILES (Secrets) ---
+.env
+.env.local
+.env.*.local
+
+# --- PYTHON / BACKEND ---
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# --- NODE / FRONTEND ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.eslintcache
+
+# --- SYSTEM FILES ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
