@@ -1,67 +1,100 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react';
+
+// TypeScript interface to match our backend Pydantic schema
+interface GuestJoinResponse {
+  status: string;
+  user_id: number;
+  church_name: string;
+  is_live: boolean;
+  room_id: number | null;
+}
 
 function App() {
-  const [messages, setMessages] = useState<string[]>([])
-  const [input, setInput] = useState('')
-  const ws = useRef<WebSocket | null>(null)
+  const [churchData, setChurchData] = useState<GuestJoinResponse | null>(null);
+  const [messages, setMessages] = useState<string[]>([]);
+  const [error, setError] = useState<string>('');
+  
+  // We will hardcode this for testing. Later, this will be read from the URL.
+  const TEST_QR_HASH = "test-hash-123"; 
+  const TARGET_LANG = "en";
+  
+  const ws = useRef<WebSocket | null>(null);
 
-  // Hardcoded for testing: Room "123", Language "en"
-  const ROOM_ID = "123"
-  const TARGET_LANG = "en"
-
-  useEffect(() => {
-    // Connect to the FastAPI WebSocket endpoint
-    ws.current = new WebSocket(`ws://localhost:8000/ws/stream/${ROOM_ID}/${TARGET_LANG}`)
-
-    ws.current.onopen = () => {
-      setMessages((prev) => [...prev, "🟢 Connected to server!"])
+  const handleScan = async () => {
+    try {
+      const response = await fetch(`/api/join/${TEST_QR_HASH}`, { method: 'POST' });
+      if (!response.ok) throw new Error("Invalid QR Code - Did you run the seed endpoint?");
+      
+      const data: GuestJoinResponse = await response.json();
+      setChurchData(data);
+      
+      // Save ID for persistence
+      localStorage.setItem('kizuna_user_id', data.user_id.toString());
+      
+      // The Traffic Cop: If live, connect!
+      if (data.is_live && data.room_id) {
+         connectWebSocket(data.room_id);
+      }
+    } catch (err: unknown) {
+      setError((err as Error).message);
     }
+  };
 
+  const connectWebSocket = (roomId: number) => {
+    ws.current = new WebSocket(`ws://localhost:8000/ws/stream/${roomId}/${TARGET_LANG}`);
+
+    ws.current.onopen = () => setMessages((prev) => [...prev, "🟢 Connected to the live translation stream!"]);
+    ws.current.onclose = () => setMessages((prev) => [...prev, "🔴 Service ended. Disconnected."]);
+    
     ws.current.onmessage = (event) => {
-      // When the server broadcasts a message, add it to our list
-      setMessages((prev) => [...prev, `Server: ${event.data}`])
-    }
+      // In Phase 3, this will parse JSON. For now, we just print the raw string.
+      setMessages((prev) => [...prev, event.data]);
+    };
+  };
 
-    ws.current.onclose = () => {
-      setMessages((prev) => [...prev, "🔴 Disconnected."])
-    }
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => ws.current?.close();
+  }, []);
 
-    // Cleanup on unmount
-    return () => {
-      ws.current?.close()
-    }
-  }, [])
-
-  const sendMessage = () => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN && input) {
-      ws.current.send(input)
-      setMessages((prev) => [...prev, `You: ${input}`])
-      setInput('')
-    }
+  // UI STATE 1: Not Scanned Yet
+  if (!churchData) {
+     return (
+       <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+          <h2>Welcome to Kizuna</h2>
+          <button onClick={handleScan} style={{ padding: '0.75rem 1.5rem', cursor: 'pointer' }}>
+            Simulate QR Scan ({TEST_QR_HASH})
+          </button>
+          {error && <p style={{ color: 'red', marginTop: '1rem' }}>{error}</p>}
+       </div>
+     );
   }
 
+  // UI STATE 2: Waiting Room
+  if (!churchData.is_live) {
+      return (
+         <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+            <h2>{churchData.church_name}</h2>
+            <p>The sermon has not started yet. Please take a seat, the translation will begin automatically.</p>
+         </div>
+      );
+  }
+
+  // UI STATE 3: Live Room
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h2>Kizuna Stream Test (Room: {ROOM_ID} | Lang: {TARGET_LANG})</h2>
-      
-      <div style={{ marginBottom: '1rem' }}>
-        <input 
-          value={input} 
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          placeholder="Type a test message..."
-          style={{ padding: '0.5rem', marginRight: '0.5rem', width: '300px' }}
-        />
-        <button onClick={sendMessage} style={{ padding: '0.5rem 1rem' }}>Send to Server</button>
-      </div>
+      <h2>{churchData.church_name} - Live Feed</h2>
+      <p style={{ color: '#666' }}>Guest ID: {churchData.user_id} | Channel: {TARGET_LANG.toUpperCase()}</p>
 
-      <div style={{ background: '#f4f4f4', padding: '1rem', height: '300px', overflowY: 'auto' }}>
+      <div style={{ background: '#f4f4f4', padding: '1rem', height: '400px', overflowY: 'auto', borderRadius: '8px' }}>
         {messages.map((msg, idx) => (
-          <div key={idx} style={{ margin: '0.5rem 0' }}>{msg}</div>
+          <div key={idx} style={{ margin: '0.5rem 0', padding: '0.5rem', background: 'white', borderRadius: '4px' }}>
+            {msg}
+          </div>
         ))}
       </div>
     </div>
   )
 }
 
-export default App
+export default App;

@@ -17,3 +17,14 @@ class ChurchResponse(ChurchBase):
     class Config:
         # Tells Pydantic to read data even if it's not a dict (like a SQLAlchemy model)
         from_attributes = True
+
+# What the API returns after a successful QR scan
+class GuestJoinResponse(BaseModel):
+    status: str
+    user_id: int              # The silent guest ID
+    church_name: str
+    is_live: bool             # The traffic cop flag (True = Live Room, False = Waiting Room)
+    room_id: Optional[int]    # Null if not live, an Integer if live
+
+    class Config:
+        from_attributes = True
