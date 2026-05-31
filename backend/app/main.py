@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .models import Church, Room, User
 from .schemas import GuestJoinResponse
 from .ai_worker import ai_manager
+from .azure_worker import AzureTranslationWorker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -117,3 +118,34 @@ async def seed_test_data(db: AsyncSession = Depends(get_db)):
     await db.commit()
     
     return {"message": "Test church and live room created!", "qr_hash": church.qr_code_hash}
+
+# A dictionary to ensure we only have one active Azure stream per room
+active_azure_workers: dict[str, AzureTranslationWorker] = {}
+
+@app.websocket("/ws/publish/{room_id}")
+async def publish_audio(websocket: WebSocket, room_id: str):
+    """
+    This endpoint is strictly for the Church Admin/Preacher.
+    It receives raw microphone audio bytes and sends them to Azure.
+    """
+    await websocket.accept()
+    
+    # Grab the current FastAPI event loop
+    loop = asyncio.get_running_loop()
+    
+    # Initialize the worker and start the Azure translation engine
+    worker = AzureTranslationWorker(room_id, loop)
+    active_azure_workers[room_id] = worker
+    worker.start_continuous_translation()
+    
+    try:
+        while True:
+            # We are receiving BYTES now, not text
+            audio_chunk = await websocket.receive_bytes()
+            worker.write_audio_chunk(audio_chunk)
+            
+    except WebSocketDisconnect:
+        # Clean up the engine when the preacher stops broadcasting
+        worker.stop_continuous_translation()
+        if room_id in active_azure_workers:
+            del active_azure_workers[room_id]

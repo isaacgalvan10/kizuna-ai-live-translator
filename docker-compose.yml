@@ -7,9 +7,9 @@ services:
     container_name: kizuna_db
     restart: always
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=kizuna_db
+      - POSTGRES_USER={$POSTGRES_USER}
+      - POSTGRES_PASSWORD={$POSTGRES_PASSWORD}
+      - POSTGRES_DB={$POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -37,8 +37,10 @@ services:
     environment:
       # The Connection String: postgresql+asyncpg://USER:PASS@HOST:PORT/DB_NAME
       # Note: Host is 'db' (the service name above), not 'localhost'
-      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/kizuna_db
+      - DATABASE_URL=postgresql+asyncpg://{$POSTGRES_USER}:{$POSTGRES_PASSWORD}@db:5432/{$POSTGRES_DB}
       - REDIS_URL=redis://redis:6379
+      - AZURE_SPEECH_KEY={$AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION={$AZURE_SPEECH_REGION}
 
   # 3. THE CACHE (Redis)
   redis:
