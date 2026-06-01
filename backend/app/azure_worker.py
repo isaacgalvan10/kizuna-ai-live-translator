@@ -50,10 +50,39 @@ class AzureTranslationWorker:
                 print(f"\n✅ [AZURE HEARD]: {japanese_text}")
                 
                 for lang, translated_text in evt.result.translations.items():
-                    print(f"🌍 [AZURE TRANSLATED to {lang.upper()}]: {translated_text}")
+                    # Format the language string to match our dictionary keys exactly
+                    clean_lang = lang.lower().strip()
+                    print(f"🌍 [AZURE TRANSLATED to {clean_lang}]: {translated_text}")
+                    
                     import asyncio
+                    
+                    # Schedule the task
+                    future = asyncio.run_coroutine_threadsafe(
+                        manager.broadcast_to_language(japanese_text, translated_text, self.room_id, clean_lang),
+                        self.loop
+                    )
+                    
+                    # Catch and print any silent errors that happen during the live broadcast
+                    def check_error(fut):
+                        try:
+                            fut.result()
+                        except Exception as e:
+                            print(f"❌ [BROADCAST ERROR]: Failed to send live message: {e}")
+                            
+                    future.add_done_callback(check_error)
+        
+        # Catch the continuous partial updates
+        def handled_recognizing_event(evt):
+            if evt.result.reason == speechsdk.ResultReason.TranslatingSpeech:
+                japanese_text = evt.result.text
+                
+                for lang, translated_text in evt.result.translations.items():
+                    clean_lang = lang.lower().strip()
+                    import asyncio
+                    
+                    # Send the fast, temporary update
                     asyncio.run_coroutine_threadsafe(
-                        manager.broadcast_to_language(translated_text, self.room_id, lang),
+                        manager.broadcast_interim(japanese_text, translated_text, self.room_id, clean_lang),
                         self.loop
                     )
 
@@ -67,6 +96,7 @@ class AzureTranslationWorker:
                     print(f"❌ [ERROR DETAILS]: {cancellation_details.error_details}")
                     print("--> Check your AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in docker-compose.yml")
 
+        self.translator.recognizing.connect(handled_recognizing_event)
         self.translator.recognized.connect(handled_recognized_event)
         self.translator.canceled.connect(handled_canceled_event) # Connect the error listener
         self.translator.session_stopped.connect(lambda evt: print("\n🛑 [AZURE SESSION STOPPED]"))
