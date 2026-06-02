@@ -17,7 +17,7 @@ export function PreacherDashboard({ roomId }: PreacherDashboardProps) {
     try {
       setStatus('Connecting to server...');
       // 1. Establish the publisher WebSocket connection
-      ws.current = new WebSocket(`ws://localhost:8000/ws/publish/${roomId}`);
+      ws.current = new WebSocket(`ws://localhost:8000/ws/stream/${roomId}`);
       
       ws.current.onopen = async () => {
         setStatus('Server connected. Accessing microphone...');

@@ -44,7 +44,7 @@ app = FastAPI(lifespan=lifespan, title="Kizuna API")
 async def health_check():
     return {"status": "healthy", "service": "Kizuna Backend"}
 
-@app.websocket("/ws/stream/{room_id}/{language}")
+@app.websocket("/ws/listen/{room_id}/{language}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, language: str):
     await manager.connect(websocket, room_id, language)
     try:
@@ -122,8 +122,8 @@ async def seed_test_data(db: AsyncSession = Depends(get_db)):
 # A dictionary to ensure we only have one active Azure stream per room
 active_azure_workers: dict[str, AzureTranslationWorker] = {}
 
-@app.websocket("/ws/publish/{room_id}")
-async def publish_audio(websocket: WebSocket, room_id: str):
+@app.websocket("/ws/stream/{room_id}")
+async def stream_audio(websocket: WebSocket, room_id: str):
     """
     This endpoint is strictly for the Church Admin/Preacher.
     It receives raw microphone audio bytes and sends them to Azure.

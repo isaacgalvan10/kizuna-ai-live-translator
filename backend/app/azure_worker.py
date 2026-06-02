@@ -23,7 +23,8 @@ class AzureTranslationWorker:
         # Add your MVP target languages
         self.translation_config.add_target_language("en")
         self.translation_config.add_target_language("ko")
-        self.translation_config.add_target_language("zh-Hans") # Simplified Chinese
+        self.translation_config.add_target_language("zh-Hans")
+        self.translation_config.add_target_language("zh-Hant")
 
         # Use an audio stream layout so we can feed raw audio bytes manually over the network
         self.audio_format = speechsdk.audio.AudioStreamFormat(

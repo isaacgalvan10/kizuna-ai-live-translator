@@ -1,3 +1,15 @@
+@import "tailwindcss";
+
+/* Keep our custom blinking cursor animation */
+.blinking-cursor {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;
