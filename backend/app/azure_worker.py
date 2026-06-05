@@ -41,6 +41,22 @@ class AzureTranslationWorker:
             audio_config=self.audio_config
         )
         
+        # NEW: The AI "Cheat Sheet" for better accuracy
+        phrase_list = speechsdk.PhraseListGrammar.from_recognizer(self.translator)
+        
+        # Add your church's specific vocabulary, names, and theological terms
+        custom_words = [
+            "イエス", "キリスト", "アーメン", "ハレルヤ", "メシア", "インマヌエル", 
+            "ワーシップ", "ゴスペル", "ペンテコステ", "ヨハネ", "ペテロ", "マタイ", 
+            "ヤコブ", "パウロ", "ルカ", "マルコ", "モーセ", "ダビデ", "イザヤ", 
+            "アブラハム", "ローマ", "コリント", "ガラテヤ", "エペソ", "ピリピ", 
+            "コロサイ", "テサロニケ", "ヘブル", "聖霊", "神様", "神", "聖書", 
+            "牧師", "救い", "恵み", "十字架", "復活", "祈り","福音","ミッショントリップ",
+            "Jesus", "Christ", "Holy Spirit", "God", "Bible", "Pastor", "Amen"
+        ]
+        for word in custom_words:
+            phrase_list.addPhrase(word)
+        
         # Connect internal Azure callbacks to our pipeline logic
         self._setup_callbacks()
 

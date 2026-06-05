@@ -17,6 +17,12 @@ export default function App() {
   const [interimMessage, setInterimMessage] = useState<TranslationMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
+  
+  // NEW: The trapdoor ref so the WebSocket can read the live state
+  const audioEnabledRef = useRef(isAudioEnabled);
+  useEffect(() => {
+    audioEnabledRef.current = isAudioEnabled;
+  }, [isAudioEnabled]);
 
   // --- REFS ---
   const ws = useRef<WebSocket | null>(null);
@@ -25,15 +31,6 @@ export default function App() {
   const globalStream = useRef<MediaStream | null>(null);
   const originalContainerRef = useRef<HTMLDivElement | null>(null);
   const translationContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Pre-warm the browser's premium voice library
-  useEffect(() => {
-    const loadVoices = () => {
-      window.speechSynthesis.getVoices();
-    };
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }, []);
 
   // The Smart Scroll
   const scrollToBottom = (container: HTMLDivElement | null) => {
@@ -56,27 +53,6 @@ export default function App() {
     scrollToBottom(translationContainerRef.current);
   }, [messages.length]);
 
-  // NEW: Algorithm to hunt for the most human-sounding voice available
-  const getBestVoice = (langCode: string) => {
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices.length) return null;
-
-    // Find voices that match our target language (e.g., 'en-US' or just 'en')
-    const baseLang = langCode.split('-')[0].toLowerCase();
-    const matchingVoices = voices.filter(v => v.lang.toLowerCase().startsWith(baseLang));
-    
-    if (matchingVoices.length === 0) return null;
-
-    // Keywords that usually indicate a high-quality cloud/neural voice
-    const premiumKeywords = ['google', 'premium', 'enhanced', 'siri', 'natural', 'online'];
-    
-    const bestVoice = matchingVoices.find(v => 
-      premiumKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
-    );
-    
-    return bestVoice || matchingVoices[0]; // Fallback to the default if no premium voice is found
-  };
-
   // --- WEBSOCKET CONNECTION (LISTENER) ---
   const connectListenerWebSocket = (roomId: string, lang: string) => {
     if (ws.current) ws.current.close();
@@ -94,33 +70,42 @@ export default function App() {
             setMessages((prev) => [...prev, payload.data]);
             setInterimMessage(null);
             
-            // Native Phone Text-to-Speech
-            if (isAudioEnabled) {
-              
+            // The Absolute Basics: Plain Text-to-Speech
+            if (audioEnabledRef.current) {
+              const synth = window.speechSynthesis;
               const utterance = new SpeechSynthesisUtterance(payload.data.translation);
-              
+              const voices = synth.getVoices();
+
+              // 1. Map your language key to the proper BCP 47 tag
               const langMap: Record<string, string> = {
                 'en': 'en-US',
                 'ko': 'ko-KR',
                 'zh-hans': 'zh-CN',
                 'zh-hant': 'zh-TW'
               };
-              
-              const targetLangCode = langMap[lang] || lang;
-              utterance.lang = targetLangCode;
-              
-              // Find and attach the most human voice available
-              const premiumVoice = getBestVoice(targetLangCode);
-              if (premiumVoice) {
-                utterance.voice = premiumVoice;
+              const targetLang = langMap[lang] || lang;
+              utterance.lang = targetLang; // Set fallback language string
+
+              if (voices.length > 0) {
+                // 2. Filter voices that strictly match your target language prefix (e.g., "en")
+                const matchingLanguages = voices.filter(v => 
+                  v.lang.toLowerCase().startsWith(targetLang.split('-')[0].toLowerCase())
+                );
+
+                if (matchingLanguages.length > 0) {
+                  // 3. Look for a premium voice *inside* that specific language group
+                  const preferredVoice = matchingLanguages.find(v => 
+                    v.name.includes("Natural") || v.name.includes("Google")
+                  );
+                  
+                  // Fallback to the first available voice of the correct language
+                  utterance.voice = preferredVoice || matchingLanguages[0];
+                }
               }
               
-              // Pitch and Rate tweaks for a more natural cadence
-              utterance.rate = 1.0; 
-              utterance.pitch = 1.0; 
-              
-              window.speechSynthesis.speak(utterance);
+              synth.speak(utterance);
             }
+
           }
         } else if (payload.type === 'interim_translation') {
           if (payload.data && payload.data.original !== undefined) {
@@ -316,25 +301,18 @@ export default function App() {
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
                   Live Feed Established
                 </div>
-
-                {/* Text-to-Speech Audio Toggle */}
                 {/* Text-to-Speech Audio Toggle */}
                 <button
                   onClick={() => {
                     const newState = !isAudioEnabled;
                     setIsAudioEnabled(newState);
                     
-                    // FIX 2: The Audio Primer
+                    // FIX: The Silent Primer (Unlocks the browser's audio engine)
                     if (newState) {
-                      // Wake up the speech engine on the exact user click
-                      window.speechSynthesis.cancel();
+                      window.speechSynthesis.cancel(); // Clear any invisible stuck queues
                       const primer = new SpeechSynthesisUtterance("Audio enabled.");
-                      primer.lang = "en-US";
-                      primer.volume = 0.5; // Keep it quiet
+                      primer.volume = 0.05; // Whisper quiet, just enough to unlock the browser
                       window.speechSynthesis.speak(primer);
-                    } else {
-                      // Cut off any currently speaking audio when turned off
-                      window.speechSynthesis.cancel();
                     }
                   }}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase border transition-all shadow-sm ${
